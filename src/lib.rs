@@ -70,7 +70,7 @@ impl Source {
     }
 }
 
-/// Document to convert.
+/// Document to convert. Supply exactly one of `data` or `path`.
 #[cfg(target_family = "wasm")]
 #[derive(Deserialize, JsonSchema)]
 struct ConvertArgs {
@@ -85,7 +85,7 @@ struct ConvertArgs {
     filename: Option<String>,
 }
 
-/// Document to identify.
+/// Document to identify. Supply exactly one of `data` or `path`.
 #[cfg(target_family = "wasm")]
 #[derive(Deserialize, JsonSchema)]
 struct DetectArgs {
@@ -96,7 +96,7 @@ struct DetectArgs {
     filename: Option<String>,
 }
 
-/// Document to extract embedded assets from.
+/// Document to extract embedded assets from. Supply exactly one of `data` or `path`.
 #[cfg(target_family = "wasm")]
 #[derive(Deserialize, JsonSchema)]
 struct AssetArgs {
