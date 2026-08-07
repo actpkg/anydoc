@@ -33,6 +33,15 @@ fn rtf_converts() {
     assert!(md.contains("RTF note"), "got: {md}");
 }
 
+/// calamine (upstream's Excel backend) is an entirely separate parser stack
+/// from the OOXML/docx path, so nothing else in the suite exercises it.
+#[test]
+fn xlsx_sheet_renders_as_a_gfm_table() {
+    let md = anydoc::to_markdown_bytes(&read("inventory.xlsx"), None).expect("should convert");
+    assert!(md.contains("| Part | Qty |"), "got: {md}");
+    assert!(md.contains("bolt"), "got: {md}");
+}
+
 #[test]
 fn with_image_docx_carries_an_asset() {
     let doc = anydoc::to_document(&read("with-image.docx"), None).expect("should parse");

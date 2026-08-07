@@ -21,6 +21,8 @@ ARGS = HERE / "args"
 CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 WML = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 REL = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+SML = "http://schemas.openxmlformats.org/spreadsheetml/2006/main"
+PKG_REL = "http://schemas.openxmlformats.org/package/2006/relationships"
 
 
 def content_types(overrides: dict[str, str]) -> bytes:
@@ -101,6 +103,57 @@ def minimal_pdf() -> bytes:
         out += b"%010d 00000 n \n" % off
     out += b"trailer\n<< /Size %d /Root 1 0 R >>\nstartxref\n%d\n%%%%EOF\n" % (n, xref_at)
     return bytes(out)
+
+
+def minimal_xlsx() -> bytes:
+    """A minimal SpreadsheetML workbook: one sheet, a header row and one data
+    row. Cells use inline strings (`t="inlineStr"`) so the package needs no
+    `xl/sharedStrings.xml` part — verified against the `anydoc` crate
+    directly (both its own content-signature detection and calamine, its
+    spreadsheet backend) before this was committed as a fixture."""
+    content_types_xml = (
+        f'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="{CT}">'
+        '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+        '<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>'
+        '<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>'
+        "</Types>"
+    ).encode()
+    root_rels = (
+        f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="{PKG_REL}">'
+        f'<Relationship Id="rId1" Type="{REL}/officeDocument" Target="xl/workbook.xml"/>'
+        "</Relationships>"
+    ).encode()
+    workbook = (
+        f'<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="{SML}" xmlns:r="{REL}">'
+        '<sheets><sheet name="Sheet1" sheetId="1" r:id="rId1"/></sheets>'
+        "</workbook>"
+    ).encode()
+    workbook_rels = (
+        f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="{PKG_REL}">'
+        f'<Relationship Id="rId1" Type="{REL}/worksheet" Target="worksheets/sheet1.xml"/>'
+        "</Relationships>"
+    ).encode()
+    sheet1 = (
+        f'<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="{SML}"><sheetData>'
+        '<row r="1">'
+        '<c r="A1" t="inlineStr"><is><t>Part</t></is></c>'
+        '<c r="B1" t="inlineStr"><is><t>Qty</t></is></c>'
+        "</row>"
+        '<row r="2">'
+        '<c r="A2" t="inlineStr"><is><t>bolt</t></is></c>'
+        '<c r="B2"><v>4</v></c>'
+        "</row>"
+        "</sheetData></worksheet>"
+    ).encode()
+    return zip_bytes(
+        {
+            "[Content_Types].xml": content_types_xml,
+            "_rels/.rels": root_rels,
+            "xl/workbook.xml": workbook,
+            "xl/_rels/workbook.xml.rels": workbook_rels,
+            "xl/worksheets/sheet1.xml": sheet1,
+        }
+    )
 
 
 DRAWING_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
@@ -220,6 +273,12 @@ def main() -> None:
     (HERE / "leaflet.pdf").write_bytes(minimal_pdf())
     note_rtf = rb"{\rtf1\ansi\deff0 {\fonttbl{\f0 Helvetica;}}\f0\fs24 A short RTF note.\par}" b"\n"
     (HERE / "note.rtf").write_bytes(note_rtf)
+
+    # A minimal spreadsheet — calamine (upstream's Excel backend) is an
+    # entirely separate parser stack from the OOXML/docx path, so nothing
+    # else in the suite exercises it. Named `inventory`, not `parts`, so its
+    # generated args body doesn't collide with parts.csv's.
+    (HERE / "inventory.xlsx").write_bytes(minimal_xlsx())
 
     # ── Hostile inputs ───────────────────────────────────────────────
     # Each must produce a clean structured error, never a trap. A panic inside

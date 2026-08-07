@@ -17,6 +17,18 @@ HTTP 200
 jsonpath "$.content[0].data.format" == "rtf"
 jsonpath "$.content[0].data.markdown" contains "RTF note"
 
+# A real .xlsx, detected from its signature — calamine is an entirely
+# separate parser stack from the OOXML/docx path, so this is the only case
+# that exercises it. The sheet renders as a GFM table.
+POST {{baseurl}}/tools/convert
+Content-Type: application/json
+file,fixtures/args/inventory.json;
+HTTP 200
+[Asserts]
+jsonpath "$.content[0].data.format" == "excel"
+jsonpath "$.content[0].data.markdown" contains "| Part | Qty |"
+jsonpath "$.content[0].data.markdown" contains "bolt"
+
 # CSV carries no signature, so with no hint there is nothing to detect.
 POST {{baseurl}}/tools/convert
 Content-Type: application/json
