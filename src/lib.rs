@@ -90,6 +90,18 @@ struct DetectArgs {
     filename: Option<String>,
 }
 
+#[cfg(target_family = "wasm")]
+#[derive(Deserialize, JsonSchema)]
+struct AssetArgs {
+    #[serde(flatten)]
+    src: Source,
+    /// Parser to use. Omit to detect from the content.
+    format: Option<Format>,
+    /// Asset ids to return bytes for. Omit to return all of them. The
+    /// manifest always lists every asset regardless.
+    ids: Option<Vec<u32>>,
+}
+
 // ── Output ───────────────────────────────────────────────────────────
 
 #[cfg(target_family = "wasm")]
@@ -110,6 +122,26 @@ struct Detected {
     /// filename did. `extension` on a document that should have a signature
     /// is a sign the file is not what it claims.
     detected_from: DetectedFrom,
+}
+
+#[cfg(target_family = "wasm")]
+#[derive(Serialize)]
+struct AssetInfo {
+    /// Index into the document's asset list; this is what `ids` selects on.
+    id: u32,
+    /// MIME type as the source recorded it, e.g. `image/png`.
+    media_type: String,
+    /// Package part or stream the asset came from, for provenance.
+    origin_part: String,
+    /// Size of the payload in bytes.
+    byte_len: u32,
+}
+
+#[cfg(target_family = "wasm")]
+#[derive(Serialize)]
+struct Manifest {
+    /// Every asset in the document, whether or not its bytes were returned.
+    assets: Vec<AssetInfo>,
 }
 
 // ── Glue ─────────────────────────────────────────────────────────────
@@ -179,5 +211,58 @@ mod component {
                      Pass `filename` if you know it — CSV in particular carries no signature.",
                 )
             })
+    }
+
+    #[act_tool(
+        description = "Extract the images and embedded objects from a document, returned as image content parts with their media type and originating package part. Emits a manifest first, so you can call again with `ids` to fetch only what you need instead of pulling every asset. Not supported for PDF.",
+        read_only
+    )]
+    async fn extract_assets(#[args] args: AssetArgs, ctx: &mut ActContext<()>) -> ActResult<()> {
+        let (bytes, path) = args.src.read()?;
+        let format = resolve_format(&bytes, args.format, path.as_deref())?;
+
+        // Upstream converts PDFs straight to Markdown without building a
+        // document model, so there is no asset list to read.
+        if format == Format::Pdf {
+            return Err(ActError::invalid_args(
+                "extract_assets does not support PDF: anydoc converts PDFs directly to Markdown \
+                 with no intermediate document model. Use the `pdf-inspector` component for PDF \
+                 images, or `convert` for the Markdown.",
+            ));
+        }
+
+        let doc = anydoc::to_document(&bytes, anydoc::Format::from(format))
+            .map_err(|e| to_act_error(&e))?;
+
+        // The manifest lists everything, so a caller can see what is there
+        // before deciding what to pull.
+        let manifest = Manifest {
+            assets: doc
+                .assets
+                .iter()
+                .map(|a| AssetInfo {
+                    id: a.id.0 as u32,
+                    media_type: a.media_type.clone(),
+                    origin_part: a.origin_part.clone(),
+                    byte_len: a.bytes.len() as u32,
+                })
+                .collect(),
+        };
+        ctx.send_cbor(&manifest);
+
+        for asset in doc.assets {
+            let id = asset.id.0 as u32;
+            if let Some(ids) = &args.ids
+                && !ids.contains(&id)
+            {
+                continue;
+            }
+            // `send_content` takes an owned String, which is why this cannot
+            // use the `Content` wrapper — that only accepts a &'static str,
+            // and a media type read from a document is not static. Any
+            // `image/*` part is mapped to a native MCP image block by the host.
+            ctx.send_content(asset.bytes, Some(asset.media_type), vec![]);
+        }
+        Ok(())
     }
 }

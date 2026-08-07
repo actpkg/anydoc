@@ -50,3 +50,13 @@ fn hostile_fixtures_error_rather_than_panic() {
         assert!(r.is_err(), "{name} should be refused, got Ok");
     }
 }
+
+/// `extract_assets` refuses PDFs. That refusal is only correct because
+/// upstream genuinely has no document model for them — if this ever starts
+/// succeeding, the refusal should be revisited.
+#[test]
+fn upstream_has_no_document_model_for_pdf() {
+    let minimal_pdf = b"%PDF-1.4\n";
+    let r = anydoc::to_document(minimal_pdf, anydoc::Format::Pdf);
+    assert!(r.is_err(), "to_document must not support PDF");
+}
