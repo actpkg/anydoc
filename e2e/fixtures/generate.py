@@ -323,6 +323,12 @@ def main() -> None:
     for p in sorted(HERE.iterdir()):
         if p.suffix in {".py", ".json"} or p.is_dir():
             continue
+        # mislabeled.txt is only ever read via `path` (detect.hurl), never
+        # via inline `data` — a `data`-only body for it would be dead
+        # weight, byte-identical in content to report.json since the two
+        # files share the same bytes.
+        if p.name == "mislabeled.txt":
+            continue
         write_args(f"{p.stem}.json", {"data": b64(p.read_bytes())})
 
     csv_b64 = b64((HERE / "parts.csv").read_bytes())
