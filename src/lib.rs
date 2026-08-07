@@ -28,12 +28,12 @@ use crate::format::{DetectedFrom, Format};
 // ── Input ────────────────────────────────────────────────────────────
 
 /// Where the document bytes come from. Supply exactly one of `data` or `path`.
-///
-/// Kept as two optional fields rather than an untagged enum because a
-/// flattened `#[serde(untagged)]` enum contributes no properties to the
-/// generated JSON Schema — the source fields would be invisible to any agent
-/// reading the tool catalogue. The "exactly one" invariant is enforced in
-/// [`Source::read`].
+//
+// Kept as two optional fields rather than an untagged enum because a
+// flattened `#[serde(untagged)]` enum contributes no properties to the
+// generated JSON Schema — the source fields would be invisible to any agent
+// reading the tool catalogue. The "exactly one" invariant is enforced in
+// `Source::read`.
 #[cfg(target_family = "wasm")]
 #[derive(Deserialize, JsonSchema)]
 struct Source {
@@ -70,6 +70,7 @@ impl Source {
     }
 }
 
+/// Document to convert.
 #[cfg(target_family = "wasm")]
 #[derive(Deserialize, JsonSchema)]
 struct ConvertArgs {
@@ -78,8 +79,13 @@ struct ConvertArgs {
     /// Parser to use. Omit to detect from the content. Required for CSV,
     /// which carries no signature. An explicit value overrides detection.
     format: Option<Format>,
+    /// Filename to fall back on for format detection when the content
+    /// carries no signature. Only the extension is used; content always
+    /// wins over this, and it is ignored when `format` is given.
+    filename: Option<String>,
 }
 
+/// Document to identify.
 #[cfg(target_family = "wasm")]
 #[derive(Deserialize, JsonSchema)]
 struct DetectArgs {
@@ -90,6 +96,7 @@ struct DetectArgs {
     filename: Option<String>,
 }
 
+/// Document to extract embedded assets from.
 #[cfg(target_family = "wasm")]
 #[derive(Deserialize, JsonSchema)]
 struct AssetArgs {
@@ -97,6 +104,10 @@ struct AssetArgs {
     src: Source,
     /// Parser to use. Omit to detect from the content.
     format: Option<Format>,
+    /// Filename to fall back on for format detection when the content
+    /// carries no signature. Only the extension is used; content always
+    /// wins over this, and it is ignored when `format` is given.
+    filename: Option<String>,
     /// Asset ids to return bytes for. Omit to return all of them. The
     /// manifest always lists every asset regardless.
     ids: Option<Vec<u32>>,
@@ -187,7 +198,8 @@ mod component {
     )]
     fn convert(#[args] args: ConvertArgs) -> ActResult<Converted> {
         let (bytes, path) = args.src.read()?;
-        let format = resolve_format(&bytes, args.format, path.as_deref())?;
+        let filename = args.filename.or(path);
+        let format = resolve_format(&bytes, args.format, filename.as_deref())?;
         let markdown = anydoc::to_markdown_bytes(&bytes, anydoc::Format::from(format))
             .map_err(|e| to_act_error(&e))?;
         Ok(Converted { markdown, format })
@@ -219,7 +231,8 @@ mod component {
     )]
     async fn extract_assets(#[args] args: AssetArgs, ctx: &mut ActContext<()>) -> ActResult<()> {
         let (bytes, path) = args.src.read()?;
-        let format = resolve_format(&bytes, args.format, path.as_deref())?;
+        let filename = args.filename.or(path);
+        let format = resolve_format(&bytes, args.format, filename.as_deref())?;
 
         // Upstream converts PDFs straight to Markdown without building a
         // document model, so there is no asset list to read.
