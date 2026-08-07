@@ -218,9 +218,8 @@ def main() -> None:
     # A minimal one-page PDF. anydoc converts PDFs straight to Markdown with
     # no document model, so this is what proves `extract_assets` refuses them.
     (HERE / "leaflet.pdf").write_bytes(minimal_pdf())
-    (HERE / "note.rtf").write_bytes(
-        rb"{\rtf1\ansi\deff0 {\fonttbl{\f0 Helvetica;}}\f0\fs24 A short RTF note.\par}" b"\n"
-    )
+    note_rtf = rb"{\rtf1\ansi\deff0 {\fonttbl{\f0 Helvetica;}}\f0\fs24 A short RTF note.\par}" b"\n"
+    (HERE / "note.rtf").write_bytes(note_rtf)
 
     # ── Hostile inputs ───────────────────────────────────────────────
     # Each must produce a clean structured error, never a trap. A panic inside
@@ -253,6 +252,29 @@ def main() -> None:
             }
         )
     )
+
+    # A WordprocessingML document whose word/document.xml nests a chain of
+    # elements ~300 levels deep — past MAX_XML_DEPTH (256). Each level is
+    # opened and closed correctly, so this is well-formed XML: the point is
+    # to trip the *depth* limit while parsing, not a malformed-XML error. The
+    # element name is arbitrary (`<w:x>` is not a real WordprocessingML
+    # element) — the generic XML parser enforces the depth cap during raw
+    # parsing, before anything tries to interpret the tree as a document.
+    # 300 rather than exactly 256 leaves margin against the `<w:document>`/
+    # `<w:body>` wrapper also counting toward the same stack.
+    deep_depth = 300
+    (HERE / "deep-nest.docx").write_bytes(
+        docx(("<w:x>" * deep_depth) + "leaf" + ("</w:x>" * deep_depth))
+    )
+
+    # note.rtf, cut in half: mid-way through the font table (inside
+    # `\fonttbl`, mid-entry), leaving 3 open groups and 0 closes. Same "cut
+    # the file in half" shape as truncated.docx, for consistency. Trailing
+    # `\n` is not part of the truncation — it's here so the committed file
+    # already satisfies pre-commit's end-of-file-fixer; without it the hook
+    # appends one on first commit, silently desyncing this file from the
+    # args/truncated-note.json baked from the newline-less bytes above.
+    (HERE / "truncated-note.rtf").write_bytes(note_rtf[: len(note_rtf) // 2] + b"\n")
 
     # ── Request bodies ───────────────────────────────────────────────
     # Ready-made, so the hurl tests stay a single source of truth with the
