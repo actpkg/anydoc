@@ -5,11 +5,16 @@ component_ref := env("OCI_REF", "actpkg.dev/library/anydoc")
 act := env("ACT", "npx @actcore/act")
 actbuild := env("ACT_BUILD", "npx @actcore/act-build")
 hurl := env("HURL", "hurl")
-# Random port for the e2e server, in a safe range: above the well-known/common
-# dev ports and below the Linux outbound ephemeral range (32768+).
-port := `shuf -i 10000-29999 -n 1`
+# Two ports, both in a safe range: above the well-known/common dev ports and
+# below the Linux outbound ephemeral range (32768+). One host runs
+# ungranted, the other granted read-only to e2e/fixtures/. See `test`.
+port := `shuf -i 10000-19999 -n 1`
+port2 := `shuf -i 20000-29999 -n 1`
 addr := "[::1]:" + port
 baseurl := "http://" + addr
+gaddr := "[::1]:" + port2
+gbaseurl := "http://" + gaddr
+fixtures_dir := justfile_directory() + "/e2e/fixtures"
 
 # Fetch WIT deps from the registry (ghcr.io/actcore) into wit/deps/.
 # wkg-registry.toml maps the act namespace -> actcore.dev (well-known -> ghcr.io/actcore).
@@ -33,10 +38,20 @@ pack: build
 test: pack
     #!/usr/bin/env bash
     set -euo pipefail
+    # Two hosts. The ungranted one proves the capability ceiling actually
+    # denies; the granted one is the only way to test a `path` source
+    # actually succeeding, since a denied call never reaches format
+    # detection at all.
     {{act}} run {{wasm}} --http --listen "{{addr}}" &
-    trap "kill $!" EXIT
+    UNGRANTED=$!
+    {{act}} run {{wasm}} --http --listen "{{gaddr}}" \
+      --grant '{"wasi:filesystem":{"mode":"allowlist","allow":[{"path":"{{fixtures_dir}}/**","mode":"ro"}]}}' &
+    GRANTED=$!
+    trap "kill $UNGRANTED $GRANTED 2>/dev/null || true" EXIT
     curl --retry 60 --retry-connrefused --retry-delay 1 -fsS -o /dev/null {{baseurl}}/info
-    {{hurl}} --test --variable "baseurl={{baseurl}}" e2e/*.hurl
+    curl --retry 60 --retry-connrefused --retry-delay 1 -fsS -o /dev/null {{gbaseurl}}/info
+    {{hurl}} --test --variable "baseurl={{baseurl}}" --variable "gbaseurl={{gbaseurl}}" \
+      --variable "fixtures_dir={{fixtures_dir}}" e2e/*.hurl
 
 publish: pack
     #!/usr/bin/env bash
@@ -52,4 +67,3 @@ publish: pack
       echo "image={{component_ref}}" >> "$GITHUB_OUTPUT"
       echo "digest=$DIGEST" >> "$GITHUB_OUTPUT"
     fi
-

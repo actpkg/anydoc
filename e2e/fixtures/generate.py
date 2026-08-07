@@ -234,25 +234,6 @@ def main() -> None:
 
     (HERE / "empty.bin").write_bytes(b"")
 
-    # A ZIP declaring an entry far larger than it is: the shape a
-    # decompression bomb takes. anydoc caps entries at 128 MiB.
-    (HERE / "bomb.docx").write_bytes(
-        zip_bytes(
-            {
-                "[Content_Types].xml": content_types(
-                    {
-                        "/word/document.xml": "application/vnd.openxmlformats-officedocument."
-                        "wordprocessingml.document.main+xml"
-                    }
-                ),
-                # 256 KiB, not megabytes: this is a shape check, and a
-                # fixture that actually allocated 128 MiB would make both CI
-                # and the committed request body miserable.
-                "word/document.xml": b"\x00" * (256 * 1024),
-            }
-        )
-    )
-
     # A WordprocessingML document whose word/document.xml nests a chain of
     # elements ~300 levels deep — past MAX_XML_DEPTH (256). Each level is
     # opened and closed correctly, so this is well-formed XML: the point is
