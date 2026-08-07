@@ -17,6 +17,12 @@ unconditionally: a weaponised document that fully corrupts the parser still
 cannot open a socket or write a byte. Documents passed inline as `data` need
 no grant at all.
 
+## Artifact size
+
+The packed component is about 6 MB (~5.7 MiB) — large for a component,
+because it bundles parsers for 14 document formats. Callers pulling it over
+OCI should budget for that.
+
 ## Usage
 
 ```bash
