@@ -4,7 +4,10 @@ hooks = [
     { id = "check-json" },
     { id = "check-yaml" },
     { id = "check-toml" },
-    { id = "end-of-file-fixer" },
+    # mislabeled.txt must stay byte-identical to report.docx (same bytes
+    # under a lying extension, for the format-detection test) — a trailing
+    # newline would break that invariant, so it is exempt from this hook.
+    { id = "end-of-file-fixer", exclude = "^e2e/fixtures/mislabeled\\.txt$" },
 ]
 
 [[repos]]
