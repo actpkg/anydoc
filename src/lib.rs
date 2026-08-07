@@ -11,3 +11,6 @@
 // only these. Any type mentioning `Bytes` or `ActResult` must stay out.
 pub mod error;
 pub mod format;
+
+#[cfg(test)]
+pub(crate) mod testzip;
