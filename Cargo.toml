@@ -1,0 +1,31 @@
+[package]
+name = "component-anydoc"
+description = "Convert Word, PowerPoint, Excel, OpenDocument, RTF, EPUB, CSV and PDF documents to GitHub-Flavored Markdown"
+version = "0.1.0"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+keywords = ["act", "markdown", "docx", "document", "wasm"]
+
+# Host builds exist only to run the fast unit tests, so the SDK and the
+# bindings generator are gated to wasm. Without this, `cargo test --target
+# x86_64-unknown-linux-gnu` would try to build wit-bindgen for the host and
+# the whole fast-unit-test strategy collapses.
+[target.'cfg(target_family = "wasm")'.dependencies]
+act-sdk = "0.13"
+wit-bindgen = { version = "0.58", features = ["async-spawn"] }
+
+[dependencies]
+anydoc = "0.1.7"
+act-types = "0.13"
+serde = { version = "1", features = ["derive"] }
+schemars = "1"
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+strip = true
+opt-level = "z"
+panic = "abort"
+
+[lib]
+crate-type = ["cdylib", "rlib"]

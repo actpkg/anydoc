@@ -1,0 +1,12 @@
+# nightly is required only because zip 8.6 -> typed-path 0.12.3 declares
+# `#![feature(wasip2)]` for target_env = "p2", which stable rejects with
+# E0554. typed-path arrives twice (directly from anydoc, and via calamine)
+# as a non-optional dependency with no feature that disables it.
+#
+# Drop back to stable once typed-path adopts the stable
+# `OsStr::as_encoded_bytes` family (the same fix uucore made in 0.10.0),
+# or once zip drops the dependency. Verified working: rustc 1.99.0-nightly.
+[toolchain]
+channel = "nightly-2026-07-15"
+targets = ["wasm32-wasip2"]
+components = ["rustfmt", "clippy"]

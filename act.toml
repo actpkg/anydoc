@@ -1,0 +1,15 @@
+[std]
+name = "anydoc"
+
+# Read-only by design: the component only ever opens a document for reading.
+# Declaring `ro` here caps every grant — no policy can give this component
+# write access. `wasi:http` and `wasi:sockets` are deliberately absent, so
+# they are denied unconditionally: a malformed document that corrupts the
+# parser still cannot reach the network. Invocations that pass `data`
+# instead of `path` need no grant at all.
+[std.capabilities."wasi:filesystem"]
+description = "Read document files from disk when a `path` source is used. Never written to."
+
+[[std.capabilities."wasi:filesystem".allow]]
+path = "**"
+mode = "ro"
