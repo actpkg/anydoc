@@ -34,7 +34,9 @@ def content_types(overrides: dict[str, str]) -> bytes:
     return f'<?xml version="1.0" encoding="UTF-8"?><Types xmlns="{CT}">{defaults}{parts}</Types>'.encode()
 
 
-def docx(body: str, extra: dict[str, bytes] | None = None) -> bytes:
+def docx(
+    body: str, extra: dict[str, bytes] | None = None, content_type_overrides: dict[str, str] | None = None
+) -> bytes:
     """A WordprocessingML package with the given <w:body> content."""
     doc = (
         f'<?xml version="1.0" encoding="UTF-8"?>'
@@ -44,7 +46,8 @@ def docx(body: str, extra: dict[str, bytes] | None = None) -> bytes:
         "[Content_Types].xml": content_types(
             {
                 "/word/document.xml": "application/vnd.openxmlformats-officedocument."
-                "wordprocessingml.document.main+xml"
+                "wordprocessingml.document.main+xml",
+                **(content_type_overrides or {}),
             }
         ),
         "_rels/.rels": f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="{REL}/officeDocument" Target="word/document.xml"/></Relationships>'.encode(),
@@ -60,7 +63,13 @@ def zip_bytes(files: dict[str, bytes]) -> bytes:
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as z:
         for name, data in files.items():
-            z.writestr(name, data)
+            # A fixed date_time keeps the generator deterministic: without
+            # it, `writestr` stamps each entry with the current wall-clock
+            # time, so merely re-running the script perturbs every existing
+            # fixture's bytes even when nothing about its content changed.
+            zinfo = zipfile.ZipInfo(name, date_time=(1980, 1, 1, 0, 0, 0))
+            zinfo.compress_type = zipfile.ZIP_DEFLATED
+            z.writestr(zinfo, data)
     return buf.getvalue()
 
 
@@ -136,6 +145,23 @@ def png_1x1() -> bytes:
     )
 
 
+def gif_1x1() -> bytes:
+    """A valid 1x1 GIF89a image: a 2-color global color table, no Graphic
+    Control Extension (transparency isn't needed for a format-detection
+    fixture). This is the well-known 35-byte minimal GIF shape."""
+    header = b"GIF89a"
+    width, height = 1, 1
+    packed_lsd = 0b1000_0000  # global color table present, 2^(0+1) = 2 entries
+    lsd = struct.pack("<HHBBB", width, height, packed_lsd, 0, 0)
+    color_table = b"\xff\xff\xff" + b"\x00\x00\x00"  # white, black
+    image_descriptor = struct.pack("<BHHHHB", 0x2C, 0, 0, width, height, 0)
+    # LZW min code size 2, one 2-byte sub-block (Clear, pixel 0, End packed
+    # LSB-first into 3-bit codes), then the block terminator.
+    image_data = bytes([0x02, 0x02, 0x44, 0x01, 0x00])
+    trailer = b"\x3b"
+    return header + lsd + color_table + image_descriptor + image_data + trailer
+
+
 def main() -> None:
     # ── Good inputs ──────────────────────────────────────────────────
     report = docx(
@@ -161,6 +187,31 @@ def main() -> None:
         },
     )
     (HERE / "with-image.docx").write_bytes(with_image)
+
+    # A docx carrying two embedded images of *different* media types, so a
+    # request that filters `extract_assets` by `ids` can be proven to have
+    # actually filtered: any response part self-identifies by its MIME type.
+    two_images = docx(
+        para("Two figures") + drawing("rId9") + drawing("rId10") + para("End."),
+        extra={
+            "word/media/image1.png": png_1x1(),
+            "word/media/image2.gif": gif_1x1(),
+            "word/_rels/document.xml.rels": (
+                f'<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+                f'<Relationship Id="rId9" Type="{REL}/image" Target="media/image1.png"/>'
+                f'<Relationship Id="rId10" Type="{REL}/image" Target="media/image2.gif"/>'
+                f"</Relationships>"
+            ).encode(),
+        },
+        # A scoped Override rather than a new shared `Default`: anydoc reads
+        # a docx image's media type from the part's file extension, not from
+        # `[Content_Types].xml` (see `media_type_for`), so this is not
+        # load-bearing for the test — but it keeps the package
+        # self-describing per OPC without perturbing every other docx
+        # fixture's bytes, which a shared `Default Extension="gif"` would.
+        content_type_overrides={"/word/media/image2.gif": "image/gif"},
+    )
+    (HERE / "two-images.docx").write_bytes(two_images)
 
     (HERE / "parts.csv").write_bytes(b"part,qty\nbolt,4\nnut,8\n")
 
@@ -218,6 +269,7 @@ def main() -> None:
     write_args("mislabeled-named.json", {"data": b64(report), "filename": "innocent.txt"})
     write_args("report-wrong-format.json", {"data": b64(report), "format": "rtf"})
     write_args("with-image-id0.json", {"data": b64(with_image), "ids": [0]})
+    write_args("two-images-id1.json", {"data": b64(two_images), "ids": [1]})
     write_args("no-source.json", {})
     write_args("both-sources.json", {"data": b64(report), "path": "/tmp/x.docx"})
 
