@@ -59,7 +59,12 @@ pub fn classify(e: &ConvertError) -> (&'static str, String) {
 ///
 /// A denied read is a capability problem, not an internal fault, and the
 /// message names the grant that would fix it — an agent reading the error
-/// should not have to guess.
+/// should not have to guess. `path` is entirely caller-supplied and the
+/// component holds no state that could be at fault, so every other read
+/// failure (a directory, a special file, a hostile symlink loop, ...) is the
+/// caller's mistake too, not `std:internal`: that kind tells an agent "the
+/// component broke, retry or escalate", when what actually needs fixing is
+/// its own argument.
 pub fn classify_io(e: &std::io::Error, path: &str) -> (&'static str, String) {
     match e.kind() {
         std::io::ErrorKind::NotFound => (ERR_NOT_FOUND, format!("File not found: {path}")),
@@ -69,7 +74,10 @@ pub fn classify_io(e: &std::io::Error, path: &str) -> (&'static str, String) {
                 "Permission denied: {path} — grant wasi:filesystem read access covering this path"
             ),
         ),
-        _ => (ERR_INTERNAL, format!("Cannot read {path}: {e}")),
+        _ => (
+            ERR_INVALID_ARGS,
+            format!("Cannot read {path}: {e} — check that it names a readable file"),
+        ),
     }
 }
 
@@ -164,10 +172,14 @@ mod tests {
         );
     }
 
+    /// The path is entirely caller-supplied, so a read failure that is
+    /// neither "not found" nor "permission denied" (a directory, a device
+    /// file, ...) is still the caller's mistake, not an internal fault.
     #[test]
-    fn any_other_io_failure_is_internal() {
+    fn any_other_io_failure_is_the_callers_mistake_not_internal() {
         let e = std::io::Error::from(std::io::ErrorKind::UnexpectedEof);
-        let (kind, _) = classify_io(&e, "/data/x");
-        assert_eq!(kind, "std:internal");
+        let (kind, msg) = classify_io(&e, "/data/x");
+        assert_eq!(kind, "std:invalid-args");
+        assert!(msg.contains("/data/x"));
     }
 }
