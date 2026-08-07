@@ -7,14 +7,85 @@ metadata:
 
 # anydoc
 
-Convert Word, PowerPoint, Excel, OpenDocument, RTF, EPUB, CSV and PDF documents to GitHub-Flavored Markdown
+Converts documents to GitHub-Flavored Markdown. Wraps
+[`anydoc`](https://github.com/firecrawl/anydoc).
+
+Handles Word (`.doc`, `.docx`, `.docm`), PowerPoint (`.ppt`, `.pptx` and
+variants), Excel (`.xls`, `.xlsx`, `.xlsm`, `.xlsb`), OpenDocument (`.odt`,
+`.ods`, `.odp`), RTF, EPUB, CSV and PDF.
+
+## Supplying the document
+
+Every tool takes exactly one of:
+
+- `data` — the bytes inline, as `{"$bytes": "<base64>"}` over JSON.
+- `path` — a file on the host. **Needs a `wasi:filesystem` read grant**
+  covering that path, otherwise the call is denied.
+
+Passing both, or neither, is an error.
 
 ## Tools
 
-### hello
-Say hello to someone.
+### `convert`
 
+Document → Markdown.
+
+```json
+{"data": {"$bytes": "UEsDBBQ..."}}
 ```
-hello(name: "Alice")
-→ "Hello, Alice!"
-```
+
+Returns `{markdown, format}`. The format is detected from the content.
+
+**CSV is the exception**: it carries no signature, so it cannot be detected
+and you must pass `format: "csv"`. Same for any file whose container we
+cannot recognise.
+
+`format` is a caller assertion — it overrides detection entirely. Pass it when
+you know; leave it off when you don't, rather than guessing.
+
+### `detect`
+
+Format identification without conversion. Much cheaper than `convert` — use it
+to triage before committing to a large document.
+
+Returns `{format, detected_from}`. `detected_from` is `content` when a
+signature identified the file, `extension` when only the filename did.
+
+**An `extension` result on a format that should carry a signature means the
+file is not what its name claims.** Treat that as a red flag.
+
+### `extract_assets`
+
+Pulls the embedded images and objects out of a document — the thing Markdown
+alone cannot give you.
+
+Emits a manifest first (`{assets: [{id, media_type, origin_part, byte_len}]}`),
+then the bytes of each asset as an image content part. Call once to see the
+manifest, then again with `ids: [0, 3]` to fetch only what you need, rather
+than pulling every asset in a large deck.
+
+**Not supported for PDF** — use the `pdf-inspector` component for that.
+
+## When to use `pdf-inspector` instead
+
+For PDFs, this component just converts. If you need to know *what kind* of PDF
+you have — text-based vs scanned, which pages need OCR, layout complexity — or
+you need page selection or a password, use `pdf-inspector`.
+
+## Errors
+
+| kind | meaning |
+|---|---|
+| `std:invalid-args` | unreadable, unrecognised, encrypted, or a bad argument |
+| `anydoc:resource-limit` | the document crossed a fixed safety limit — a decompression bomb or runaway expansion. The message names the limit. |
+| `std:not-found` | no file at `path` |
+| `std:capability-denied` | `path` used without a `wasi:filesystem` read grant |
+
+## Limits
+
+Fixed and not configurable: 128 MiB per archive entry, 512 MiB per archive,
+100k entries, XML nesting depth 256, 2M XML nodes, 128 MiB of retained assets.
+Real documents sit far below all of these.
+
+Conversion is not lossy-free: complex layouts flatten to linear Markdown, and
+scanned/image-only PDFs are refused rather than OCR'd.
