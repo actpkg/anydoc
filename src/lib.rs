@@ -80,11 +80,7 @@ struct ConvertArgs {
     format: Option<Format>,
 }
 
-// Not wired to a tool yet — the `detect` tool lands in Task 6, which will
-// construct this. `#[allow(dead_code)]` keeps clippy's `-D warnings` gate
-// green in the interim; remove it once `detect` uses this.
 #[cfg(target_family = "wasm")]
-#[allow(dead_code)]
 #[derive(Deserialize, JsonSchema)]
 struct DetectArgs {
     #[serde(flatten)]
@@ -106,9 +102,7 @@ struct Converted {
     format: Format,
 }
 
-// Same as `DetectArgs`: unused until Task 6 wires up the `detect` tool.
 #[cfg(target_family = "wasm")]
-#[allow(dead_code)]
 #[derive(Serialize)]
 struct Detected {
     format: Format,
@@ -165,5 +159,25 @@ mod component {
         let markdown = anydoc::to_markdown_bytes(&bytes, anydoc::Format::from(format))
             .map_err(|e| to_act_error(&e))?;
         Ok(Converted { markdown, format })
+    }
+
+    #[act_tool(
+        description = "Identify a document's format without converting it. Reports whether the format came from the content signature or only from the filename — an `extension` result on a format that should carry a signature means the file is not what its name claims. Much cheaper than convert.",
+        read_only
+    )]
+    fn detect(#[args] args: DetectArgs) -> ActResult<Detected> {
+        let (bytes, path) = args.src.read()?;
+        let filename = args.filename.or(path);
+        crate::format::detect(&bytes, filename.as_deref())
+            .map(|(format, detected_from)| Detected {
+                format,
+                detected_from,
+            })
+            .ok_or_else(|| {
+                ActError::invalid_args(
+                    "Unrecognized document: no known signature and no usable filename extension. \
+                     Pass `filename` if you know it — CSV in particular carries no signature.",
+                )
+            })
     }
 }
