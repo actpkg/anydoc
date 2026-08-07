@@ -43,6 +43,19 @@ jobs:
       - run: just init
       - run: cargo clippy -- -D warnings
 
+  test:
+    name: Unit Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: moonrepo/setup-rust@v1
+        with:
+          bins: wkg, just
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - run: just init
+      - run: just test-unit
+
   e2e:
     name: E2E Test
     needs: build
@@ -63,7 +76,7 @@ jobs:
   publish:
     name: Publish
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
-    needs: [e2e, lint]
+    needs: [e2e, lint, test]
     runs-on: ubuntu-latest
     permissions:
       contents: read      # checkout
