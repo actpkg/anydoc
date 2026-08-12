@@ -8,15 +8,12 @@ Everything here is ours, and small enough to review.
 Run from this directory:  python3 generate.py
 """
 
-import base64
-import json
 import pathlib
 import struct
 import zipfile
 import zlib
 
 HERE = pathlib.Path(__file__).parent
-ARGS = HERE / "args"
 
 CT = "http://schemas.openxmlformats.org/package/2006/content-types"
 WML = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
@@ -316,43 +313,9 @@ def main() -> None:
     # args/truncated-note.json baked from the newline-less bytes above.
     (HERE / "truncated-note.rtf").write_bytes(note_rtf[: len(note_rtf) // 2] + b"\n")
 
-    # ── Request bodies ───────────────────────────────────────────────
-    # Ready-made, so the hurl tests stay a single source of truth with the
-    # fixtures instead of carrying pasted base64 that drifts.
-    ARGS.mkdir(exist_ok=True)
-    for p in sorted(HERE.iterdir()):
-        if p.suffix in {".py", ".json"} or p.is_dir():
-            continue
-        # mislabeled.txt is only ever read via `path` (detect.hurl), never
-        # via inline `data` — a `data`-only body for it would be dead
-        # weight, byte-identical in content to report.json since the two
-        # files share the same bytes.
-        if p.name == "mislabeled.txt":
-            continue
-        write_args(f"{p.stem}.json", {"data": b64(p.read_bytes())})
-
-    csv_b64 = b64((HERE / "parts.csv").read_bytes())
-    write_args("parts-typed.json", {"data": csv_b64, "format": "csv"})
-    write_args("parts-named.json", {"data": csv_b64, "filename": "parts.csv"})
-    write_args("mislabeled-named.json", {"data": b64(report), "filename": "innocent.txt"})
-    write_args("report-wrong-format.json", {"data": b64(report), "format": "rtf"})
-    write_args("with-image-id0.json", {"data": b64(with_image), "ids": [0]})
-    write_args("two-images-id1.json", {"data": b64(two_images), "ids": [1]})
-    write_args("no-source.json", {})
-    write_args("both-sources.json", {"data": b64(report), "path": "/tmp/x.docx"})
-
     for p in sorted(HERE.iterdir()):
         if p.is_file() and p.suffix not in {".py", ".json"}:
             print(f"{p.name}: {p.stat().st_size} bytes")
-    print(f"{len(list(ARGS.glob('*.json')))} request bodies in {ARGS.name}/")
-
-
-def b64(data: bytes) -> dict:
-    return {"$bytes": base64.b64encode(data).decode()}
-
-
-def write_args(name: str, arguments: dict) -> None:
-    (ARGS / name).write_text(json.dumps({"arguments": arguments}) + "\n")
 
 
 if __name__ == "__main__":
