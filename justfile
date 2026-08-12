@@ -24,18 +24,24 @@ init:
 setup: init
     prek install
 
+# Build and pack. Packing is part of building on purpose: `cargo build` alone
+# produces a wasm with no `act:component` section, which declares no capability
+# ceiling, so at runtime every grant is refused as "outside ceiling" and the
+# failure points anywhere but at the missing metadata.
 build:
     cargo build --release
+    {{actbuild}} pack {{wasm}}
 
 # Fast unit tests for the SDK-free modules, on the host target.
 test-unit:
     cargo test --target x86_64-unknown-linux-gnu
 
-# Embed act:component metadata and act:skill into the wasm.
-pack: build
+# Re-embed act:component metadata and act:skill without rebuilding. `pack` is
+# idempotent, so running it after `build` is harmless.
+pack:
     {{actbuild}} pack {{wasm}}
 
-test: pack
+test: build
     #!/usr/bin/env bash
     set -euo pipefail
     # Two hosts. The ungranted one proves the capability ceiling actually
@@ -53,7 +59,7 @@ test: pack
     {{hurl}} --test --variable "baseurl={{baseurl}}" --variable "gbaseurl={{gbaseurl}}" \
       --variable "fixtures_dir={{fixtures_dir}}" e2e/*.hurl
 
-publish: pack
+publish: build
     #!/usr/bin/env bash
     set -euo pipefail
     INFO=$({{act}} inspect component-manifest {{wasm}})
