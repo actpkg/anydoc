@@ -1,7 +1,7 @@
 [package]
 name = "component-anydoc"
 description = "Convert Word, PowerPoint, Excel, OpenDocument, RTF, EPUB, CSV and PDF documents to GitHub-Flavored Markdown"
-version = "0.1.1"
+version = "0.1.2"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 keywords = ["act", "markdown", "docx", "document", "wasm"]
