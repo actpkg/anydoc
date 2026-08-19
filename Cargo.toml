@@ -15,7 +15,7 @@ act-sdk = "0.14"
 
 [dependencies]
 anydoc = "0.1.7"
-act-types = "0.13"
+act-types = "0.14"
 serde = { version = "1", features = ["derive"] }
 schemars = "1"
 
