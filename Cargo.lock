@@ -9,7 +9,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ef6c83f61730109fff62bae99e3d4bc084d108c1e24badc7d6094e26ca636581"
 dependencies = [
  "act-sdk-macros",
- "act-types 0.14.0",
+ "act-types",
  "ciborium",
  "schemars 1.2.2",
  "serde",
@@ -27,19 +27,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "act-types"
-version = "0.13.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe768fdbd2ff37741546cd1cef1c63d32080c0939ab4fe73f707ab7cd630b319"
-dependencies = [
- "base64",
- "ciborium",
- "serde",
- "serde_json",
- "serde_with",
 ]
 
 [[package]]
@@ -370,7 +357,7 @@ name = "component-anydoc"
 version = "0.1.0"
 dependencies = [
  "act-sdk",
- "act-types 0.13.1",
+ "act-types",
  "anydoc",
  "schemars 1.2.2",
  "serde",
