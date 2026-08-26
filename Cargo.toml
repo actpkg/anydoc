@@ -14,7 +14,7 @@ keywords = ["act", "markdown", "docx", "document", "wasm"]
 act-sdk = "0.14"
 
 [dependencies]
-anydoc = "0.1.7"
+anydoc = "0.2.3"
 act-types = "0.13"
 serde = { version = "1", features = ["derive"] }
 schemars = "1"
