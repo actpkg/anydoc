@@ -1,7 +1,7 @@
 [package]
 name = "component-anydoc"
 description = "Convert Word, PowerPoint, Excel, OpenDocument, RTF, EPUB, CSV and PDF documents to GitHub-Flavored Markdown"
-version = "0.1.2"
+version = "0.1.3"
 edition = "2024"
 license = "MIT OR Apache-2.0"
 keywords = ["act", "markdown", "docx", "document", "wasm"]
@@ -11,7 +11,7 @@ keywords = ["act", "markdown", "docx", "document", "wasm"]
 # x86_64-unknown-linux-gnu` would try to build wit-bindgen for the host and
 # the whole fast-unit-test strategy collapses.
 [target.'cfg(target_family = "wasm")'.dependencies]
-act-sdk = "0.14"
+act-sdk = "0.14.3"
 
 [dependencies]
 anydoc = "0.2.4"
